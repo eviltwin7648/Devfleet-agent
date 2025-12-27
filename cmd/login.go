@@ -8,11 +8,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
+	// "runtime"
 	"strings"
 
+	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 	"github.com/eviltwin7648/devfleet-agent/internal/config"
-	"github.com/shirou/gopsutil/v3/mem"
+	// "github.com/shirou/gopsutil/v3/mem"
 	"github.com/spf13/cobra"
 )
 
@@ -37,18 +38,18 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("API key cannot be empty")
 		}
 
-		hostname, _ := os.Hostname()
-		memInfo, err := mem.VirtualMemory()
-		if err != nil {
-			return fmt.Errorf("could not get memory info: %w", err)
-		}
-		payload := RegisterPayload{
-			OS:       runtime.GOOS,
-			Arch:     runtime.GOARCH,
-			Hostname: hostname,
-			TotalMem: memInfo.Total,
-			ApiKey:   key,
-		}
+	mi, err := utils.CollectMachineInfo()
+	if err != nil {
+	return fmt.Errorf("failed to get machine info: %w", err)
+	}
+
+	payload := RegisterPayload{
+		OS:       mi.OS,
+		Arch:     mi.Arch,
+		Hostname: mi.Hostname,
+		TotalMem: mi.TotalMem,
+		ApiKey:   key,
+	}
 		jsonBody, err := json.Marshal(payload)
 		if err != nil {
 			return fmt.Errorf("could not marshal request body: %w", err)
@@ -63,16 +64,16 @@ var loginCmd = &cobra.Command{
 			bodyBytes, _ := io.ReadAll(resp.Body)
 			return fmt.Errorf("registration failed with status %d: %s", resp.StatusCode, string(bodyBytes))
 		}
-
 		type ValidateResponse struct {
 			Username string `json:"username"`
+			AgentID  string `json:"agent_id"`
 		}
 
 		var data ValidateResponse
 		if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 			return fmt.Errorf("failed to decode response: %w", err)
 		}
-		if err := config.SaveKey(key); err != nil {
+		if err := config.SaveKey(key, data.AgentID); err != nil {
 			return fmt.Errorf("failed to save key: %w", err)
 
 		}
