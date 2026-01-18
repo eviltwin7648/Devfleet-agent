@@ -10,12 +10,12 @@ import (
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
-func Start(apiKey string, agentId string) {
+func Start(token string, agentId string) {
 	ticker := time.NewTicker(1 * time.Minute) // heartbeat interval
 	defer ticker.Stop()
 
 	for {
-		if err := sendHeartbeat(apiKey, agentId); err != nil {
+		if err := sendHeartbeat(token, agentId); err != nil {
 			fmt.Println("Heartbeat error:", err)
 		}
 
@@ -23,15 +23,13 @@ func Start(apiKey string, agentId string) {
 	}
 }
 
-func sendHeartbeat(apiKey string, agentId string) error {
+func sendHeartbeat(token string, agentId string) error {
 	mi, err := utils.CollectMachineInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get machine info: %w", err)
 	}
 
 	payload := map[string]interface{}{
-		"agentId":  agentId,
-		"apiKey":   apiKey, // OR better: include JWT if backend uses tokens
 		"machine":  mi,
 	}
 
@@ -40,11 +38,15 @@ func sendHeartbeat(apiKey string, agentId string) error {
 		return fmt.Errorf("failed to marshal heartbeat payload: %w", err)
 	}
 
-	resp, err := http.Post(
-		"http://localhost:8080/api/v1/agent/heartbeat",
-		"application/json",
-		bytes.NewBuffer(jsonBody),
-	)
+	req, err := http.NewRequest("POST", "http://localhost:8080/api/v1/agent/heartbeat", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
