@@ -14,7 +14,9 @@ type JobStatus string
 const (
 	JobSuccess JobStatus = "Success"
 	JobFailed  JobStatus = "Failure"
+	JobRunning JobStatus = "Running"
 	JobTimeout JobStatus = "Timeout"
+	JobCancelled JobStatus = "Cancelled"
 )
 
 type JobResult struct {
@@ -28,11 +30,19 @@ type JobResult struct {
 	Error      string
 }
 
+// JobDefinition holds the script and config, nested inside a JobExecution from the backend.
+type JobDefinition struct {
+	Script     string            `json:"script"`
+	Env        map[string]string `json:"env"`
+	TimeoutSec int               `json:"timeoutSec"`
+}
+
+// Job represents the JobExecution returned by the backend /jobs/pull endpoint.
+// The script lives inside the nested JobDefinition (field "job").
 type Job struct {
-	ID          string            `json:"id"`
-	Script      string            `json:"script"`
-	Env         map[string]string `json:"env"`
-	TimeoutSec  int               `json:"timeoutSec"`
+	ID         string        `json:"id"`
+	Status     string        `json:"status"`
+	Definition JobDefinition `json:"job"` // nested JobDefinition
 }
 
 func RunJob(job Job) JobResult {
@@ -40,14 +50,15 @@ func RunJob(job Job) JobResult {
 
 	// Default timeout 10 minutes if not specified
 	timeout := 10 * time.Minute
-	if job.TimeoutSec > 0 {
-		timeout = time.Duration(job.TimeoutSec) * time.Second
+	if job.Definition.TimeoutSec > 0 {
+		timeout = time.Duration(job.Definition.TimeoutSec) * time.Second
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "bash", "-c", job.Script)
+	fmt.Printf("[RunJob] Executing script for job %s: %q\n", job.ID, job.Definition.Script)
+	cmd := exec.CommandContext(ctx, "bash", "-c", job.Definition.Script)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -55,7 +66,7 @@ func RunJob(job Job) JobResult {
 
 	// Set environment variables
 	cmd.Env = os.Environ()
-	for k, v := range job.Env {
+	for k, v := range job.Definition.Env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 

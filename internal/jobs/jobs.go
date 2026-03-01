@@ -11,66 +11,83 @@ import (
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
+// StartPolling continuously long-polls the backend for jobs.
+// Using ?longPoll=true means the server holds the connection open (up to 30s)
+// and responds the moment a job is available — no fixed polling delay.
 func StartPolling(token string, agentId string) {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
+	fmt.Println("[polling] Starting long-poll loop...")
 	for {
-		poll(token, agentId)
-		<-ticker.C
+		gotJob := poll(token, agentId)
+		if !gotJob {
+			// No job or timeout — loop back immediately to long-poll again.
+			// Small sleep only on error (set inside poll) to avoid hammering on failures.
+		}
 	}
-	fmt.Println("Polling for jobs...")
 }
 
-func poll(token string, agentId string) {
-	req, err := http.NewRequest("GET", "http://localhost:8080/api/v1/agent/jobs/pull", nil)
+// poll does a single long-poll request. Returns true if a job was found and executed.
+// The server will hold the connection open for up to 30s waiting for a job,
+// so we set an HTTP timeout of 35s to give it room.
+func poll(token string, agentId string) bool {
+	req, err := http.NewRequest("GET", "http://localhost:8080/api/v1/agent/jobs/pull?longPoll=true", nil)
 	if err != nil {
-		fmt.Println("Error creating poll request:", err)
-		return
+		fmt.Println("[poll] Error creating request:", err)
+		time.Sleep(5 * time.Second)
+		return false
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	client := &http.Client{}
+	// 35s timeout: server holds for 30s, we give 5s extra for network overhead
+	client := &http.Client{Timeout: 35 * time.Second}
 	resp, err := client.Do(req)
-
 	if err != nil {
-		fmt.Println("Error while polling for jobs", err)
-		return
+		fmt.Println("[poll] Request error:", err)
+		time.Sleep(5 * time.Second)
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Polling for jobs failed with status:", resp.Status)
-		return
+		fmt.Println("[poll] Unexpected status:", resp.Status)
+		time.Sleep(5 * time.Second)
+		return false
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return
+		fmt.Println("[poll] Error reading body:", err)
+		return false
 	}
 
-	// Parse the response which is { "job": { ... } } or { "job": null }
+	// Response is { "job": { ... } } or { "job": null }
 	var respData struct {
 		Job *utils.Job `json:"job"`
 	}
 	if err := json.Unmarshal(body, &respData); err != nil {
-		fmt.Println("Error parsing job response:", err)
-		return
+		fmt.Println("[poll] Error parsing response:", err)
+		return false
 	}
 
-	if respData.Job != nil {
-		fmt.Println("Found job:", respData.Job.ID, respData.Job.Script)
-		result := utils.RunJob(*respData.Job)
-		fmt.Printf("Job finished with status: %s, Exit Code: %d\n", result.Status, result.ExitCode)
-		
-		if err := reportJobResult(token, respData.Job.ID, result); err != nil {
-			fmt.Println("Failed to report job result:", err)
-		} else {
-             fmt.Println("Job result reported successfully.")
-        }
-	} else {
-		fmt.Println("No jobs pending.")
+	if respData.Job == nil {
+		// Long-poll timed out server-side with no job — immediately loop again
+		return false
 	}
+
+	fmt.Printf("[poll] Received job ID: %s, script: %q\n", respData.Job.ID, respData.Job.Definition.Script)
+	if respData.Job.Definition.Script == "" {
+		fmt.Println("[poll] WARNING: job has an empty script, skipping execution")
+		return false
+	}
+
+	result := utils.RunJob(*respData.Job)
+	fmt.Printf("[poll] Job finished — status: %s, exit code: %d\n", result.Status, result.ExitCode)
+
+	if err := reportJobResult(token, respData.Job.ID, result); err != nil {
+		fmt.Println("[poll] Failed to report job result:", err)
+	} else {
+		fmt.Println("[poll] Job result reported successfully.")
+	}
+	return true
 }
 
 func reportJobResult(token string, jobID string, result utils.JobResult) error {
@@ -86,7 +103,7 @@ func reportJobResult(token string, jobID string, result utils.JobResult) error {
 		return fmt.Errorf("marshal error: %w", err)
 	}
 
-	url := fmt.Sprintf("http://localhost:8080/api/v1/agent/job/%s/result", jobID)
+	url := fmt.Sprintf("http://localhost:8080/api/v1/agent/execution/%s/result", jobID)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("create request error: %w", err)
