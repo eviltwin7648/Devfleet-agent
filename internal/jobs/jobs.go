@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
@@ -29,7 +28,7 @@ func StartPolling(token string, agentId string) {
 // The server will hold the connection open for up to 30s waiting for a job,
 // so we set an HTTP timeout of 35s to give it room.
 func poll(token string, agentId string) bool {
-	req, err := http.NewRequest("GET", "http://localhost:8080/api/v1/agent/jobs/pull?longPoll=true", nil)
+	req, err := http.NewRequest("GET", "http://localhost:8080/api/v1/agent/jobs/pull", nil)
 	if err != nil {
 		fmt.Println("[poll] Error creating request:", err)
 		time.Sleep(5 * time.Second)
@@ -73,13 +72,13 @@ func poll(token string, agentId string) bool {
 		return false
 	}
 
-	fmt.Printf("[poll] Received job ID: %s, script: %q\n", respData.Job.ID, respData.Job.Definition.Script)
+	fmt.Printf("[poll] Received job execution ID: %s, script: %q\n", respData.Job.ID, respData.Job.Definition.Script)
 	if respData.Job.Definition.Script == "" {
 		fmt.Println("[poll] WARNING: job has an empty script, skipping execution")
 		return false
 	}
 
-	result := utils.RunJob(*respData.Job)
+	result := utils.RunJob(*respData.Job, token)
 	fmt.Printf("[poll] Job finished — status: %s, exit code: %d\n", result.Status, result.ExitCode)
 
 	if err := reportJobResult(token, respData.Job.ID, result); err != nil {

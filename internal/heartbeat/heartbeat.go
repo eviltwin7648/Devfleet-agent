@@ -29,8 +29,11 @@ func sendHeartbeat(token string, agentId string) error {
 		return fmt.Errorf("failed to get machine info: %w", err)
 	}
 
+	hi, _ := utils.CollectHealthInfo()
+
 	payload := map[string]interface{}{
-		"machine":  mi,
+		"machine": mi,
+		"health":  hi,
 	}
 
 	jsonBody, err := json.Marshal(payload)

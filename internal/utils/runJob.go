@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -12,11 +13,11 @@ import (
 type JobStatus string
 
 const (
-	JobSuccess JobStatus = "Success"
-	JobFailed  JobStatus = "Failure"
-	JobRunning JobStatus = "Running"
-	JobTimeout JobStatus = "Timeout"
-	JobCancelled JobStatus = "Cancelled"
+	JobSuccess JobStatus = "SUCCESS"
+	JobFailed  JobStatus = "FAILED"
+	JobRunning JobStatus = "RUNNING"
+	JobTimeout JobStatus = "TIMEOUT"
+	JobCancelled JobStatus = "CANCELLED"
 )
 
 type JobResult struct {
@@ -40,12 +41,12 @@ type JobDefinition struct {
 // Job represents the JobExecution returned by the backend /jobs/pull endpoint.
 // The script lives inside the nested JobDefinition (field "job").
 type Job struct {
-	ID         string        `json:"id"`
+	ExecutionId         string        `json:"id"`
 	Status     string        `json:"status"`
 	Definition JobDefinition `json:"job"` // nested JobDefinition
 }
 
-func RunJob(job Job) JobResult {
+func RunJob(job Job, token string) JobResult {
 	start := time.Now()
 
 	// Default timeout 10 minutes if not specified
@@ -57,12 +58,23 @@ func RunJob(job Job) JobResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	fmt.Printf("[RunJob] Executing script for job %s: %q\n", job.ID, job.Definition.Script)
+	fmt.Printf("[RunJob] Executing script for job execution ID %s: %q\n", job.ExecutionId, job.Definition.Script)
 	cmd := exec.CommandContext(ctx, "bash", "-c", job.Definition.Script)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Set up LogBatcher
+	batcher := NewLogBatcher(job.ExecutionId, token)
+	defer batcher.Stop()
+
+	//for streaming the logs
+	stdoutWriter := NewStreamWriter(batcher, "STDOUT")
+	stderrWriter := NewStreamWriter(batcher, "STDERR")
+
+	//keep in memory to send with final job result.()
+	var memStdout, memStderr bytes.Buffer
+	// MultiWriter to save to Memory (for final result POST) and stream to Backend
+	cmd.Stdout = os.Stdout // For agent's terminal logs if wanted, but better to io.MultiWriter
+	cmd.Stdout = io.MultiWriter(&memStdout, stdoutWriter)
+	cmd.Stderr = io.MultiWriter(&memStderr, stderrWriter)
 
 	// Set environment variables
 	cmd.Env = os.Environ()
@@ -83,8 +95,8 @@ func RunJob(job Job) JobResult {
 	end := time.Now()
 
 	result := JobResult{
-		Stdout:     stdout.String(),
-		Stderr:     stderr.String(),
+		Stdout:     memStdout.String(),
+		Stderr:     memStderr.String(),
 		StartedAt:  start,
 		FinishedAt: end,
 		Duration:   end.Sub(start),
