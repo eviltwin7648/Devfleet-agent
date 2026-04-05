@@ -13,10 +13,10 @@ import (
 type JobStatus string
 
 const (
-	JobSuccess JobStatus = "SUCCESS"
-	JobFailed  JobStatus = "FAILED"
-	JobRunning JobStatus = "RUNNING"
-	JobTimeout JobStatus = "TIMEOUT"
+	JobSuccess   JobStatus = "SUCCESS"
+	JobFailed    JobStatus = "FAILED"
+	JobRunning   JobStatus = "RUNNING"
+	JobTimeout   JobStatus = "TIMEOUT"
 	JobCancelled JobStatus = "CANCELLED"
 )
 
@@ -33,6 +33,7 @@ type JobResult struct {
 
 // JobDefinition holds the script and config, nested inside a JobExecution from the backend.
 type JobDefinition struct {
+	ID         string            `json:"id"`
 	Script     string            `json:"script"`
 	Env        map[string]string `json:"env"`
 	TimeoutSec int               `json:"timeoutSec"`
@@ -41,9 +42,9 @@ type JobDefinition struct {
 // Job represents the JobExecution returned by the backend /jobs/pull endpoint.
 // The script lives inside the nested JobDefinition (field "job").
 type Job struct {
-	ExecutionId         string        `json:"id"`
-	Status     string        `json:"status"`
-	Definition JobDefinition `json:"job"` // nested JobDefinition
+	ExecutionId string        `json:"id"`
+	Status      string        `json:"status"`
+	Definition  JobDefinition `json:"job"` // nested JobDefinition
 }
 
 func RunJob(job Job, token string) JobResult {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
@@ -72,7 +73,7 @@ func poll(token string, agentId string) bool {
 		return false
 	}
 
-	fmt.Printf("[poll] Received job execution ID: %s, script: %q\n", respData.Job.ID, respData.Job.Definition.Script)
+	fmt.Printf("[poll] Received job execution ID: %s, script: %q\n", respData.Job.ExecutionId, respData.Job.Definition.Script)
 	if respData.Job.Definition.Script == "" {
 		fmt.Println("[poll] WARNING: job has an empty script, skipping execution")
 		return false
@@ -81,7 +82,7 @@ func poll(token string, agentId string) bool {
 	result := utils.RunJob(*respData.Job, token)
 	fmt.Printf("[poll] Job finished — status: %s, exit code: %d\n", result.Status, result.ExitCode)
 
-	if err := reportJobResult(token, respData.Job.ID, result); err != nil {
+	if err := reportJobResult(token, respData.Job.ExecutionId, result); err != nil {
 		fmt.Println("[poll] Failed to report job result:", err)
 	} else {
 		fmt.Println("[poll] Job result reported successfully.")
@@ -93,8 +94,8 @@ func reportJobResult(token string, jobID string, result utils.JobResult) error {
 	payload := map[string]interface{}{
 		"status":    result.Status, // "SUCCESS", "FAILED"
 		"exit_code": result.ExitCode,
-        "stdout": result.Stdout, // Sending logs optionally
-        "stderr": result.Stderr,
+		"stdout":    result.Stdout, // Sending logs optionally
+		"stderr":    result.Stderr,
 	}
 
 	jsonBody, err := json.Marshal(payload)
@@ -119,10 +120,9 @@ func reportJobResult(token string, jobID string, result utils.JobResult) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-        body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("backend returned status %s: %s", resp.Status, string(body))
 	}
 
 	return nil
 }
-
