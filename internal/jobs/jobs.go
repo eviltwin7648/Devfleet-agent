@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/eviltwin7648/devfleet-agent/internal/auth"
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
@@ -29,7 +30,7 @@ func StartPolling(token string, agentId string) {
 // The server will hold the connection open for up to 30s waiting for a job,
 // so we set an HTTP timeout of 35s to give it room.
 func poll(token string, agentId string) bool {
-	req, err := http.NewRequest("GET", "http://localhost:8080/api/v1/agent/jobs/pull", nil)
+	req, err := http.NewRequest("GET", auth.BackendURL+"/api/v1/agent/jobs/pull", nil)
 	if err != nil {
 		fmt.Println("[poll] Error creating request:", err)
 		time.Sleep(5 * time.Second)
@@ -103,7 +104,7 @@ func reportJobResult(token string, jobID string, result utils.JobResult) error {
 		return fmt.Errorf("marshal error: %w", err)
 	}
 
-	url := fmt.Sprintf("http://localhost:8080/api/v1/agent/execution/%s/result", jobID)
+	url := fmt.Sprintf("%s/api/v1/agent/execution/%s/result", auth.BackendURL, jobID)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("create request error: %w", err)
