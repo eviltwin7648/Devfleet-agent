@@ -14,7 +14,7 @@ type Config struct {
 
 func ConfigPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "./devfleet", "config.json")
+	return filepath.Join(home, ".devfleet", "config.json")
 }
 
 func SaveKey(key, agentID, apiURL string) error {
