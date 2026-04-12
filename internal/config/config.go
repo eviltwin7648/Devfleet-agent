@@ -9,6 +9,7 @@ import (
 type Config struct {
 	APIKey  string `json:"api_key"`
 	AgentID string `json:"agent_id"`
+	APIURL  string `json:"api_url"`
 }
 
 func ConfigPath() string {
@@ -16,10 +17,11 @@ func ConfigPath() string {
 	return filepath.Join(home, "./devfleet", "config.json")
 }
 
-func SaveKey(key, agentID string) error {
+func SaveKey(key, agentID, apiURL string) error {
 	cfg := Config{
 		APIKey:  key,
 		AgentID: agentID,
+		APIURL:  apiURL,
 	}
 	data, err := json.MarshalIndent(cfg, "", " ")
 	if err != nil {
@@ -34,7 +36,7 @@ func SaveKey(key, agentID string) error {
 
 func LoadKey() (*Config, error) {
 	data, err := os.ReadFile(ConfigPath())
-	
+
 	if err != nil {
 		return nil, err
 	}

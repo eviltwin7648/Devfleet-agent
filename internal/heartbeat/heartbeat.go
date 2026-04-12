@@ -7,16 +7,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eviltwin7648/devfleet-agent/internal/auth"
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
-func Start(token string, agentId string) {
+func Start(token string, agentId string, apiURL string) {
 	ticker := time.NewTicker(1 * time.Minute) // heartbeat interval
 	defer ticker.Stop()
 
 	for {
-		if err := sendHeartbeat(token, agentId); err != nil {
+		if err := sendHeartbeat(token, agentId, apiURL); err != nil {
 			fmt.Println("Heartbeat error:", err)
 		}
 
@@ -24,7 +23,7 @@ func Start(token string, agentId string) {
 	}
 }
 
-func sendHeartbeat(token string, agentId string) error {
+func sendHeartbeat(token string, agentId string, apiURL string) error {
 	mi, err := utils.CollectMachineInfo()
 	if err != nil {
 		return fmt.Errorf("failed to get machine info: %w", err)
@@ -42,7 +41,7 @@ func sendHeartbeat(token string, agentId string) error {
 		return fmt.Errorf("failed to marshal heartbeat payload: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", auth.BackendURL+"/api/v1/agent/heartbeat", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", apiURL+"/api/v1/agent/heartbeat", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

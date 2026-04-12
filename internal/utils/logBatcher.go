@@ -2,7 +2,7 @@
 
 //there is one hole in the system (if the request fails i lose logs, need to work something)
 
-//each log should have its own sequence number
+// each log should have its own sequence number
 package utils
 
 import (
@@ -14,68 +14,67 @@ import (
 	"time"
 )
 
-
-type LogEntry struct{
-	Type string `json:"type"`
-	Content string `json:"content"`
-	Timestamp int `json:"timestamp"`
-	Sequence int `json:"sequence"`
+type LogEntry struct {
+	Type      string `json:"type"`
+	Content   string `json:"content"`
+	Timestamp int    `json:"timestamp"`
+	Sequence  int    `json:"sequence"`
 }
 
 type LogBatch struct {
-	Logs []LogEntry `json:"logs"`
-	Sequence int `json:"sequence"`
+	Logs     []LogEntry `json:"logs"`
+	Sequence int        `json:"sequence"`
 }
 
 type LogBatcher struct {
 	jobExecutionId string
-	token string
-	url string
-	mu sync.Mutex
-	entries []LogEntry
-	bytes int
-	batchSeq int
-	logSeq int
+	token          string
+	url            string
+	mu             sync.Mutex
+	entries        []LogEntry
+	bytes          int
+	batchSeq       int
+	logSeq         int
 	//only one client (connection reuse)
 	client *http.Client
-	stop chan struct{}
+	stop   chan struct{}
 }
 
-func NewLogBatcher(jobExecutionId string, token string) *LogBatcher {
-	url := fmt.Sprintf("http://localhost:8080/api/v1/agent/execution/%s/logs", jobExecutionId)
+func NewLogBatcher(jobExecutionId string, token string, apiURL string) *LogBatcher {
+	url := fmt.Sprintf("%s/api/v1/agent/execution/%s/logs", apiURL, jobExecutionId)
 
 	b := &LogBatcher{
-		jobExecutionId:jobExecutionId,
-		token:token,
-		url:url,
-		stop:make(chan struct{}),
-		client: &http.Client{Timeout: 5 * time.Second},
+		jobExecutionId: jobExecutionId,
+		token:          token,
+		url:            url,
+		stop:           make(chan struct{}),
+		client:         &http.Client{Timeout: 5 * time.Second},
 	}
 
 	go b.flushLoop()
 	return b
 }
 
-func (b *LogBatcher) WriteLog(logType, message string){
+func (b *LogBatcher) WriteLog(logType, message string) {
 	b.mu.Lock()
 	b.logSeq++
 	b.entries = append(b.entries, LogEntry{
-		Type: logType,
-		Content: message,
+		Type:      logType,
+		Content:   message,
 		Timestamp: int(time.Now().Unix()),
-		Sequence: b.logSeq,
+		Sequence:  b.logSeq,
 	})
 	b.bytes += len(message)
-	
-	shouldFlush := b.bytes >= 32*1024 
+
+	shouldFlush := b.bytes >= 32*1024
 	b.mu.Unlock()
-	if shouldFlush{
+	if shouldFlush {
 		b.flush()
 	}
 }
 
-func (b *LogBatcher) flushLoop(){
-	ticker := time.NewTicker(1*time.Second)
+func (b *LogBatcher) flushLoop() {
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -88,13 +87,13 @@ func (b *LogBatcher) flushLoop(){
 	}
 }
 
-func (b*LogBatcher) flush(){
+func (b *LogBatcher) flush() {
 	b.mu.Lock()
-	if(len(b.entries) == 0){
+	if len(b.entries) == 0 {
 		b.mu.Unlock()
 		return
 	}
-	
+
 	batch := b.entries
 	b.entries = nil
 	b.bytes = 0
@@ -102,53 +101,52 @@ func (b*LogBatcher) flush(){
 	seq := b.batchSeq
 	b.mu.Unlock()
 
-	payload := LogBatch{Logs:batch, Sequence: seq}
+	payload := LogBatch{Logs: batch, Sequence: seq}
 	jsonBody, err := json.Marshal(payload)
-	if err != nil{
+	if err != nil {
 		fmt.Printf("[LogBatcher] Failed to marshal logs: %v\n", err)
 		return
 	}
 	req, err := http.NewRequest("POST", b.url, bytes.NewBuffer(jsonBody))
-	if err != nil{
+	if err != nil {
 		fmt.Printf("[LogBatcher] Failed to create request: %v\n", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer " + b.token)
+	req.Header.Set("Authorization", "Bearer "+b.token)
 
 	resp, err := b.client.Do(req)
-	if err != nil{
+	if err != nil {
 		fmt.Printf("[LogBatcher] Failed to send logs: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	// because the StatusOK only checks for 200. server coulld return something else(200-299)
-	if resp.StatusCode < 200 ||  resp.StatusCode >= 300  {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		fmt.Printf("[LogBatcher] Failed to send logs: %v\n", resp.StatusCode)
 		return
 	}
 }
 
-
-func (b *LogBatcher) Stop(){
+func (b *LogBatcher) Stop() {
 	close(b.stop)
 }
 
-type StreamWriter struct{
+type StreamWriter struct {
 	batcher *LogBatcher
 	logType string
 }
-func NewStreamWriter(batcher *LogBatcher, logType string) *StreamWriter{
+
+func NewStreamWriter(batcher *LogBatcher, logType string) *StreamWriter {
 	return &StreamWriter{
 		batcher: batcher,
 		logType: logType,
 	}
 }
 
-
-//some sort of binding to the io.Writer interface
-func (w *StreamWriter) Write (p []byte) (n int, err error){
+// some sort of binding to the io.Writer interface
+func (w *StreamWriter) Write(p []byte) (n int, err error) {
 	w.batcher.WriteLog(w.logType, string(p))
 	return len(p), nil
 }

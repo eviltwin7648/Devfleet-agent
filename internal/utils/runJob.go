@@ -47,7 +47,7 @@ type Job struct {
 	Definition  JobDefinition `json:"job"` // nested JobDefinition
 }
 
-func RunJob(job Job, token string) JobResult {
+func RunJob(job Job, token string, apiURL string) JobResult {
 	start := time.Now()
 
 	// Default timeout 10 minutes if not specified
@@ -63,7 +63,7 @@ func RunJob(job Job, token string) JobResult {
 	cmd := exec.CommandContext(ctx, "bash", "-c", job.Definition.Script)
 
 	// Set up LogBatcher
-	batcher := NewLogBatcher(job.ExecutionId, token)
+	batcher := NewLogBatcher(job.ExecutionId, token, apiURL)
 	defer batcher.Stop()
 
 	//for streaming the logs

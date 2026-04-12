@@ -16,6 +16,14 @@ var loginCmd = &cobra.Command{
 	Short: "Login to the service",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Enter your DevFleet API URL: ")
+		apiURL, _ := reader.ReadString('\n')
+		apiURL = auth.NormalizeAPIURL(strings.TrimSpace(apiURL))
+
+		if apiURL == "" {
+			return fmt.Errorf("API URL cannot be empty")
+		}
+
 		fmt.Print("Enter your Agent API Key: ")
 		key, _ := reader.ReadString('\n')
 		key = strings.TrimSpace(key)
@@ -24,11 +32,11 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("API key cannot be empty")
 		}
 
-		data, err := auth.RegisterAgent(key)
+		data, err := auth.RegisterAgent(key, apiURL)
 		if err != nil {
 			return err
 		}
-		if err := config.SaveKey(key, data.AgentID); err != nil {
+		if err := config.SaveKey(key, data.AgentID, apiURL); err != nil {
 			return fmt.Errorf("failed to save key: %w", err)
 
 		}

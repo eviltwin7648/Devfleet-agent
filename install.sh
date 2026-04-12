@@ -23,5 +23,13 @@ chmod +x devfleet-agent
 echo "Installing..."
 sudo mv devfleet-agent /usr/local/bin/
 
+read -rp "Enter your DevFleet API URL: " API_URL
+API_URL=$(printf '%s' "$API_URL" | sed 's:/*$::')
+
+if [ -z "$API_URL" ]; then
+  echo "API URL cannot be empty."
+  exit 1
+fi
+
 echo "Starting agent..."
-devfleet-agent start --token="$TOKEN"
+devfleet-agent start --token="$TOKEN" --api-url="$API_URL"

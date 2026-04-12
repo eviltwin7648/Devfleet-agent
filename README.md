@@ -26,6 +26,7 @@ devfleet-agent login
 
 You will be prompted for:
 
+- DevFleet API URL
 - Agent API key
 
 This command sends machine info to:
@@ -49,6 +50,12 @@ For non-interactive bootstrap, the installer can pass an API key directly:
 devfleet-agent start --token '<agent-api-key>'
 ```
 
+For unattended bootstrap with a known self-hosted API URL:
+
+```bash
+devfleet-agent start --token '<agent-api-key>' --api-url 'https://your-devfleet.example.com'
+```
+
 That registers the machine, saves `~/devfleet/config.json`, verifies the agent, and then starts the runtime loops.
 
 This command calls:
@@ -65,6 +72,7 @@ This command calls:
 
 `devfleet-agent login` collects:
 
+- DevFleet API URL
 - hostname
 - OS
 - architecture
@@ -124,31 +132,12 @@ Current shape:
 ```json
 {
   "api_key": "df_...",
-  "agent_id": "uuid"
+  "agent_id": "uuid",
+  "api_url": "https://your-devfleet.example.com"
 }
 ```
 
 This file is created by `devfleet-agent login`.
-
-## Backend Assumptions
-
-The current code targets:
-
-```text
-http://localhost:8080
-```
-
-That base URL is hardcoded in:
-
-- `cmd/login.go`
-- `internal/auth/auth.go`
-- `internal/heartbeat/heartbeat.go`
-- `internal/jobs/jobs.go`
-
-So for local development, either:
-
-1. run the backend on port `8080`, or
-2. change those URLs before building the agent
 
 ## Build
 
@@ -198,7 +187,8 @@ What it does:
 
 1. downloads a release binary for the current OS/arch
 2. installs it to `/usr/local/bin/devfleet-agent`
-3. starts the agent
+3. asks for the DevFleet API URL
+4. starts the agent
 
 ## Project Structure
 
@@ -233,7 +223,6 @@ Important files:
 
 ## Known Gaps
 
-- The backend README and server code currently default to port `8000`, but this agent hardcodes `http://localhost:8080`.
 - The backend-generated API key is still stored locally after login; the runtime obtains a JWT only during `start`.
 
 If you want smoother deployment, the next step is to centralize the backend base URL in config or environment and align the install flow with the CLI.

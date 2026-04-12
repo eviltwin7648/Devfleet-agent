@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
-
-const BackendURL = "http://localhost:8080"
 
 type registerPayload struct {
 	OS       string `json:"os"`
@@ -25,10 +24,25 @@ type registerResponse struct {
 	AgentID  string `json:"agent_id"`
 }
 
-func RegisterAgent(apiKey string) (*registerResponse, error) {
+func NormalizeAPIURL(apiURL string) string {
+	trimmed := strings.TrimSpace(apiURL)
+	if trimmed == "" {
+		return ""
+	}
+	if !strings.HasPrefix(trimmed, "http://") && !strings.HasPrefix(trimmed, "https://") {
+		trimmed = "http://" + trimmed
+	}
+	return strings.TrimRight(trimmed, "/")
+}
+
+func RegisterAgent(apiKey, apiURL string) (*registerResponse, error) {
 	mi, err := utils.CollectMachineInfo()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get machine info: %w", err)
+	}
+	apiURL = NormalizeAPIURL(apiURL)
+	if apiURL == "" {
+		return nil, fmt.Errorf("API URL cannot be empty")
 	}
 
 	payload := registerPayload{
@@ -45,7 +59,7 @@ func RegisterAgent(apiKey string) (*registerResponse, error) {
 	}
 
 	resp, err := http.Post(
-		BackendURL+"/api/v1/agent/register",
+		apiURL+"/api/v1/agent/register",
 		"application/json",
 		bytes.NewBuffer(jsonBody),
 	)
@@ -67,10 +81,14 @@ func RegisterAgent(apiKey string) (*registerResponse, error) {
 	return &data, nil
 }
 
-func VerifyAgent(apiKey string) (string, error) {
+func VerifyAgent(apiKey, apiURL string) (string, error) {
 	mi, err := utils.CollectMachineInfo()
 	if err != nil {
 		return "", fmt.Errorf("failed to collect machine info: %w", err)
+	}
+	apiURL = NormalizeAPIURL(apiURL)
+	if apiURL == "" {
+		return "", fmt.Errorf("API URL cannot be empty")
 	}
 
 	payload := map[string]interface{}{
@@ -85,7 +103,7 @@ func VerifyAgent(apiKey string) (string, error) {
 	}
 
 	resp, err := http.Post(
-		BackendURL+"/api/v1/agent/verify",
+		apiURL+"/api/v1/agent/verify",
 		"application/json",
 		bytes.NewBuffer(jsonBody),
 	)

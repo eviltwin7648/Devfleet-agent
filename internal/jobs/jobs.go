@@ -8,17 +8,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eviltwin7648/devfleet-agent/internal/auth"
 	"github.com/eviltwin7648/devfleet-agent/internal/utils"
 )
 
 // StartPolling continuously long-polls the backend for jobs.
 // Using ?longPoll=true means the server holds the connection open (up to 30s)
 // and responds the moment a job is available — no fixed polling delay.
-func StartPolling(token string, agentId string) {
+func StartPolling(token string, agentId string, apiURL string) {
 	fmt.Println("[polling] Starting long-poll loop...")
 	for {
-		gotJob := poll(token, agentId)
+		gotJob := poll(token, agentId, apiURL)
 		if !gotJob {
 			// No job or timeout — loop back immediately to long-poll again.
 			// Small sleep only on error (set inside poll) to avoid hammering on failures.
@@ -29,8 +28,8 @@ func StartPolling(token string, agentId string) {
 // poll does a single long-poll request. Returns true if a job was found and executed.
 // The server will hold the connection open for up to 30s waiting for a job,
 // so we set an HTTP timeout of 35s to give it room.
-func poll(token string, agentId string) bool {
-	req, err := http.NewRequest("GET", auth.BackendURL+"/api/v1/agent/jobs/pull", nil)
+func poll(token string, agentId string, apiURL string) bool {
+	req, err := http.NewRequest("GET", apiURL+"/api/v1/agent/jobs/pull", nil)
 	if err != nil {
 		fmt.Println("[poll] Error creating request:", err)
 		time.Sleep(5 * time.Second)
@@ -80,10 +79,10 @@ func poll(token string, agentId string) bool {
 		return false
 	}
 
-	result := utils.RunJob(*respData.Job, token)
+	result := utils.RunJob(*respData.Job, token, apiURL)
 	fmt.Printf("[poll] Job finished — status: %s, exit code: %d\n", result.Status, result.ExitCode)
 
-	if err := reportJobResult(token, respData.Job.ExecutionId, result); err != nil {
+	if err := reportJobResult(token, apiURL, respData.Job.ExecutionId, result); err != nil {
 		fmt.Println("[poll] Failed to report job result:", err)
 	} else {
 		fmt.Println("[poll] Job result reported successfully.")
@@ -91,7 +90,7 @@ func poll(token string, agentId string) bool {
 	return true
 }
 
-func reportJobResult(token string, jobID string, result utils.JobResult) error {
+func reportJobResult(token string, apiURL string, jobID string, result utils.JobResult) error {
 	payload := map[string]interface{}{
 		"status":    result.Status, // "SUCCESS", "FAILED"
 		"exit_code": result.ExitCode,
@@ -104,7 +103,7 @@ func reportJobResult(token string, jobID string, result utils.JobResult) error {
 		return fmt.Errorf("marshal error: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/agent/execution/%s/result", auth.BackendURL, jobID)
+	url := fmt.Sprintf("%s/api/v1/agent/execution/%s/result", apiURL, jobID)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return fmt.Errorf("create request error: %w", err)
