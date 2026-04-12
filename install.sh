@@ -23,7 +23,7 @@ chmod +x devfleet-agent
 echo "Installing..."
 sudo mv devfleet-agent /usr/local/bin/
 
-read -rp "Enter your DevFleet API URL: " API_URL
+read -rp "Enter your DevFleet API URL: " API_URL < /dev/tty
 API_URL=$(printf '%s' "$API_URL" | sed 's:/*$::')
 
 if [ -z "$API_URL" ]; then
