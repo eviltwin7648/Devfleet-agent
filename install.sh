@@ -2,7 +2,7 @@
 set -e
 
 REPO="eviltwin7648/Devfleet-agent"
-VERSION="agent"
+VERSION="agentv1.0.1"
 TOKEN=$1
 
 OS=$(uname | tr '[:upper:]' '[:lower:]')
